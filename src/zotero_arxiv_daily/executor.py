@@ -3,6 +3,7 @@ from pyzotero import zotero
 from omegaconf import DictConfig
 from .utils import glob_match
 from .retriever import get_retriever_cls
+from .retriever.base import registered_retrievers
 from .protocol import CorpusPaper
 import random
 from datetime import datetime
@@ -14,8 +15,16 @@ from tqdm import tqdm
 class Executor:
     def __init__(self, config:DictConfig):
         self.config = config
+        sources = config.executor.source
+        if sources is None:
+            sources = [s for s in registered_retrievers
+                       if config.source.get(s) is not None
+                       and config.source.get(s).get('category') is not None]
+            if not sources:
+                sources = ['arxiv']
+            logger.info(f"executor.source not specified, auto-detected sources: {sources}")
         self.retrievers = {
-            source: get_retriever_cls(source)(config) for source in config.executor.source
+            source: get_retriever_cls(source)(config) for source in sources
         }
         self.reranker = get_reranker_cls(config.executor.reranker)(config)
         self.openai_client = OpenAI(api_key=config.llm.api.key, base_url=config.llm.api.base_url)
